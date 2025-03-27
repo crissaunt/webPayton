@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Tracking</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+    <h1>Live Location Tracking</h1>
+    <div id="map" style="height: 500px;margin-top:10px;"></div>
+
+
+    <script>
+        const map = L.map('map').setView([0,0],2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const socket = io();
+        var marker = null;
+        var pathLine = null;
+        var pathCoordinates = [];
+
+        function UpdateLocation(position){
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            console.log(`Live Coordinates: Latitude ${lat}, Longitude ${lon}`);
+
+            if(!marker){
+                marker = L.marker([lat,lon]).addTo(map).bindPopup("You are here").openPopup();
+                map.setView([lat,lon], 18);
+            }else{
+                marker.setLatLng([lat,lon]);
+            }
+
+            if (!pathLine){
+                pathLine = L.polyline(pathCoordinates,{color:"blue"}).addTo(map);
+            }else{
+                pathLine.setLatLng(pathCoordinates)
+            }
+        }
+
+
+        function handleLocationErrors(error){
+            console.error("Error getting location:" , error.message);
+            alert("Unable to fetch the location")
+        }
+
+        if(navigator.geolocation){
+            navigator.geolocation.watchPosition(UpdateLocation, handleLocationErrors,{
+                enableHighAccuracy:true,
+                maximumAge:0,
+            });
+        }else{
+            alert("Geolocation is not supported by youre browser")
+        }
+
+    </script>
+</body>
+</html>

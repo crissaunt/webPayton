@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Tracking</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        #user-list {
+            border-left: 1px solid #ccc;
+            margin-left: 20px;
+        }
+        .user-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Location Tracking</h1>
+    <div style="display: flex;">
+        <div id="map" style="height: 500px; width: 70%; margin-top: 10px;"></div>
+        <div id="user-list" style="width: 30%; padding: 20px;">
+            <h3>Connected Users</h3>
+            <ul id="users" style="list-style: none; padding: 0;"></ul>
+        </div>
+    </div>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Socket.io connection
+        const socket = io();
+        let userMarkers = {};  // To track other users' markers
+        let myMarker = null;
+        let pathLine = null;
+        const pathCoordinates = [];
+
+        // Handle geolocation updates
+        function updateLocation(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const timestamp = new Date().getTime();
+
+            // Update local marker and path
+            if (!myMarker) {
+                myMarker = L.marker([lat, lon]).addTo(map)
+                    .bindPopup("Your position").openPopup();
+                map.setView([lat, lon], 18);
+            } else {
+                myMarker.setLatLng([lat, lon]);
+            }
+
+            // Update path
+            pathCoordinates.push([lat, lon]);
+            if (!pathLine) {
+                pathLine = L.polyline(pathCoordinates, {color: "blue"}).addTo(map);
+            } else {
+                pathLine.setLatLngs(pathCoordinates);
+            }
+
+            // Send position to server
+            socket.emit('location', {
+                user_id: socket.id,
+                lat: lat,
+                lon: lon,
+                timestamp: timestamp
+            });
+        }
+
+        // Handle other users' updates
+        socket.on('update', (data) => {
+            if (data.user_id === socket.id) return;
+
+            if (!userMarkers[data.user_id]) {
+                userMarkers[data.user_id] = L.marker([data.lat, data.lon])
+                    .bindPopup(`User ${data.user_id.slice(0, 6)}`)
+                    .addTo(map);
+            } else {
+                userMarkers[data.user_id].setLatLng([data.lat, data.lon]);
+            }
+        });
+
+        // Handle user disconnections
+        socket.on('user_disconnected', (userId) => {
+            if (userMarkers[userId]) {
+                map.removeLayer(userMarkers[userId]);
+                delete userMarkers[userId];
+            }
+        });
+
+        // Error handling
+        function handleLocationErrors(error) {
+            console.error("Error getting location:", error.message);
+            alert("Unable to fetch your location");
+        }
+
+        // Start geolocation tracking
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(
+                updateLocation,
+                handleLocationErrors,
+                { enableHighAccuracy: true, maximumAge: 0 }
+            );
+        } else {
+            alert("Geolocation is not supported by your browser");
+        }
+    </script>
+</body>
+</html>
